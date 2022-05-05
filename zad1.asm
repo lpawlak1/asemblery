@@ -1,19 +1,18 @@
-.model large
 
 dane1 segment
-    number1 dw 0 ; placehorder na liczbe, zeby z registrami sie nie bawic
-    number_cnt dw 0, "$" ; wskazuje na to ile jest cyfr w liczbie czytanej
-    numberA dw 0 ; liczba A we wzorze y=Ax+B
-    numberB dw 0 ; liczba B we wzorze y=Ax+B
-    text2 db 10, "To nie jest cyfra$"
-    text3 db 10, "To nie jest dobra wartosc$"
-    podajA db 10, "Podaj parametr A(min 0, max 8): $"
-    podajB db 13, "Podaj parametr B(min 0, max 8): $"
-    wypiszY db 13, "wspolrzedna Y dla X=0: $"
-    wypiszX db 10, "wspolrzedna X dla ktorej funkcja ta przyjmuje wartosc 0: $"
-    wypiszSkale db 10, "Skala to kazda kratka to 1, w obu osiach :) $"
-    brak_miejsca db "Brak miejsca zerowego$"
-    i1    db 408 dup (" "), "$" ; cały wykres
+    number1       dw  0 ; placehorder na liczbe, zeby z registrami sie nie bawic
+    number_cnt    dw  0, "$" ; wskazuje na to ile jest cyfr w liczbie czytanej
+    numberA       dw  0 ; liczba A we wzorze y=Ax+B
+    numberB       dw  0 ; liczba B we wzorze y=Ax+B
+    text2         db  10, "To nie jest cyfra$"
+    text3         db  10, "To nie jest dobra wartosc$"
+    podajA        db  10, "Podaj parametr A(min 0, max 8): $"
+    podajB        db  13, "Podaj parametr B(min 0, max 8): $"
+    wypiszY       db  13, "wspolrzedna Y dla X=0: $"
+    wypiszX       db  10, "wspolrzedna X dla ktorej funkcja ta przyjmuje wartosc 0: $"
+    wypiszSkale   db  10, "Skala to kazda kratka to 1, w obu osiach :) $"
+    brak_miejsca  db  "Brak miejsca zerowego$"
+    i1            db  408 dup (" "), "$" ; cały wykres
 dane1 ends
 
 stos1 segment stack
@@ -43,7 +42,7 @@ PRINT_Y0 endp
 ; print x0, where y = 0 so x0 = -b/a
 ;######################################################
 PRINT_X0 PROC
-    .486
+    .486 ; potrzebne do imul / idiv (znalezione na wikibooks asemblera)
     mov ah, 09h
     mov dx, offset wypiszX
     int 21h
@@ -59,24 +58,24 @@ PRINT_X0 PROC
     neg dx ; to jest dziwne ale neguje liczbe dx:ax (-b)
 
     cmp [ds:numberB], 0
-    jnl dalej5
+    jnl dalej5 ; jesli liczba >= 0 to idz do dalej5
 
-    neg ax
-    dalej5:
+    neg ax ; metoda prób i błędów żeby wiedzieć co zanegować
+    dalej5: 
 
     idiv bx ; ax = dx:ax/bx
 
     push dx ; to jest reszta z dzielenia, wrzucam ją bo za chwilę będzie print
 
     cmp [ds:numberB], 0
-    jl dalej6
+    jl dalej6 ; jak liczba b jest < 0 to dalej6, jak nie to trzeba zanegowac
 
     neg ax
 
     dalej6:
     call PRINT ; printuje ax (wynik dzielenia)
 
-    pop dx
+    pop dx ; reszta z dzielenia do dx
 
     cmp dx, 0 
     jnz print_reszta ; jezeli dx różne od 0 to printuje je
@@ -137,14 +136,14 @@ PRINT PROC
         ret
 
     neg1:
-        neg ax
-        push ax
+        neg ax ; neguje ax bo minusa sb wypisze a dodatnia liczbe normalnie
+        push ax ; wrzucam na stos bo za chwile bedzie destrukcja "ax"
 
         xor ax, ax
         xor dx, dx
 
         mov dl, 45
-        mov ah, 02h
+        mov ah, 02h ; wypisane minusa
         int 21h
 
         pop ax
@@ -206,16 +205,16 @@ WCZYTAJLICZBE proc
     mov dx, offset podajA
     int 21h
 
-    call WCZYTAJ
+    call WCZYTAJ ; WCZYTAJ zczytuje liczbe i zapisuje w ds:number1
     mov ax, ds:number1
-    mov ds:numberA, ax
+    mov ds:numberA, ax ; przesuwam ds:number1 do numberA
 
     mov ah, 09h
     mov dx, offset podajB
     int 21h
 
     call WCZYTAJ 
-    mov ax, ds:number1
+    mov ax, ds:number1 ; tak samo jak z A (jw)
     mov ds:numberB, ax
 
     ret
@@ -229,7 +228,6 @@ WCZYTAJ proc
 
     mov ds:number1, 0; zainicjalizuj na 0
     mov [ds:number_cnt], 0 ; zainicjalizuj na 0
-
     mov dx, 0
     push dx ; liczba jest dodatnia
 
@@ -286,14 +284,14 @@ WCZYTAJ proc
         int 21h
 
         jmp loop1
-        ret
 
     move_backspace:
+        pop dx
+        push dx ; zdejmij info czy jest minus, ale na stosie zostaw tą inormacje :)
+
         ; tu by sie przydaj if czy cnt jest 1 i na wejsciu jest -
         ; bo wtedy sie nie dzieli
-        pop dx
-        push dx ; zdejmij info czy jest minus
-
+        ; jak w dx jest 1 to jest minus, jak jest cokolwiek innego to nie ma minusa
         cmp dx, 1
         je usun_minusa
 
@@ -324,11 +322,13 @@ WCZYTAJ proc
         mov ah,4ch ; koncze program caly
         int 21h	
         ret
+        
     enter_neg:
         mov ax, [ds:number1]
         neg ax
         mov [ds:number1], ax
         ret
+        
     enter_not_neg:
         ret
 
@@ -340,7 +340,6 @@ WCZYTAJ proc
 
         jmp enter_not_neg
 
-        ret
 
     tooBig: ; too big
         mov ah, 09h
@@ -366,6 +365,7 @@ WCZYTAJ proc
 
         jmp loop1
         ret
+        
     usun_minusa:
         mov dl, 00 ; rng pusty znak XD
         mov ah, 06h
@@ -383,10 +383,6 @@ WCZYTAJ proc
 
         jmp loop1
         ret
-
-
-
-
 WCZYTAJ endp
 
 ;######################################################
@@ -404,6 +400,9 @@ start:
     push bx
     
     
+    ; gora stosu
+    ; srodkowy number
+    ; koncowy numer
 
 loop2:
     ; put into i1+1=+22*i
@@ -413,21 +412,21 @@ loop2:
     ; zawsze na stosie jest srodkowy, koncowy
     pop bx
 
-    mov [ds:i1][bx], '#'
+    mov [ds:i1][bx], '#' ; do tablicy wstawiam os
     add bx, 24
 
     mov ax, bx ; just for second
     pop bx
 
-    mov [ds:i1][bx], 10
+    mov [ds:i1][bx], 10 ; do tablicy wstawiam 10 w ASCII (końce linii)
     add bx, 24
 
     push bx
     push ax
     
     inc cx
-    cmp cx, 16 ; jest 16 rzędów XD
-    jle loop2
+    cmp cx, 16 ; jest 16 rzędów
+    jle loop2 ; jak cx mniejsze luyb rowne 16 to jmp do loop2
 
     pop bx
     pop bx
@@ -438,9 +437,9 @@ loop2:
 loop3_start:
     xor cx, cx
     
-    mov bx, 192
+    mov bx, 192 ; 192 to poczatek linii gdzie jest os x
     
-loop3:
+loop3: ; wypelnienie osi x
 
     mov [ds:i1][bx], '#'
     inc bx
@@ -450,6 +449,7 @@ loop3:
     jle loop3
 
     ret
+    
 PREPARE_ARR endp
 
 WRITE_ARR_FUNC proc
@@ -505,14 +505,14 @@ PRINT_ARR proc
     xor dx, dx 
 
     mov ah, 02h
-    mov dl, 10
+    mov dl, 10 ; nowa linia
     int 21h
 
     xor ax, ax
     xor dx, dx
     
     mov ah, 09h
-    mov dx, offset i1
+    mov dx, offset i1 ; cala przygotowana tablica :)
     int 21h
 
     ret
@@ -520,13 +520,9 @@ PRINT_ARR proc
 PRINT_ARR endp
 
     
-assume cs:code1, ds:dane1
+; assume cs:code1, ds:dane1 ; poznane na najnowszym wykładzie, w zad2 użyje
 
 s1:
-    ; ;PSP do rejestru ES
-    ; mov bx,ds
-    ; mov es,bx
-
     ;segment danych do DS
     mov ax, seg dane1
     mov ds, ax
@@ -539,7 +535,7 @@ s1:
     xor ax,ax
     xor bx,bx
 
-    mov number1, 0
+    mov [ds:number1], 0
     
     ;glowna czesc programu - wywolania funkcji
     call WCZYTAJLICZBE
@@ -549,7 +545,7 @@ s1:
 
     call PREPARE_ARR
 
-    mov bx, 407
+    mov bx, 407 ; tu był znak 10 ale nie ma potrzeba go miec na koncu
     mov [ds:i1][bx], ' '
 
     call WRITE_ARR_FUNC
@@ -570,5 +566,3 @@ code1 ends
 
 
 end s1
-
-; zrobic dzielenie jakos
